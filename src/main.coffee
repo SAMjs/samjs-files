@@ -4,4 +4,5 @@ module.exports = (samjs) ->
   plugin = {}
   plugin.name = files.name
   plugin.obj = files
+  plugin.startup = files.startup
   return plugin

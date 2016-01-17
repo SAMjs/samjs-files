@@ -2,127 +2,200 @@ chai = require "chai"
 should = chai.should()
 samjs = require "samjs"
 samjsClient = require "samjs-client"
-samjsMongoClient = require "samjs-mongo-client"
-samjsMongo = require("../src/main")
-mongoose = require "mongoose"
+samjsFiles = require "../src/main"
+samjsFilesClient = require "samjs-files-client"
+samjsAuth = require "samjs-auth"
+samjsAuthClient = require "samjs-auth-client"
 fs = samjs.Promise.promisifyAll(require("fs"))
-port = 3050
+port = 3060
 url = "http://localhost:"+port+"/"
 testConfigFile = "test/testConfig.json"
-mongodb = "mongodb://localhost/test"
 
 testModel =
   name: "test"
-  db: "mongo"
-  schema:
-    testProp: String
-    testProp2: Boolean
-  plugins:
-    testPlugin: null
+  db: "files"
+  files: testConfigFile
+testModel2 =
+  name: "test2"
+  db: "files"
+  files: testConfigFile+"2"
+  write: "root"
+  read: "root"
+testModel3 =
+  name: "test3"
+  db: "files"
+  files:
+    path: testConfigFile+"3"
+    write: "root"
+    read: "root"
+testModel4 =
+  name: "testMultipleFiles"
+  db: "files"
+  files: [testConfigFile,testConfigFile+"2"]
+unlink = (file) ->
+  fs.unlinkAsync file
+  .catch -> return true
+reset = (done) ->
+  samjs.reset()
+  unlink testConfigFile
+  .finally ->
+    done()
+shutdown = (done) ->
 
-describe "mongoose", ->
-  it "should work", (done) ->
-    samjs.Promise.resolve(mongoose.createConnection(mongodb))
-    .then (conn) ->
-      return new samjs.Promise (resolve) ->
-        conn.on "open", ->
-          resolve(conn)
-    .call "close"
-    .then -> done()
-    .catch done
+  promises = [unlink(testConfigFile),unlink(testConfigFile+"2"),unlink(testConfigFile+"3")]
+  promises.push samjs.shutdown() if samjs.shutdown?
+  samjs.Promise.all promises
+  .then -> done()
 
 describe "samjs", ->
   client = null
   clientTest = null
-  before (done) ->
-    samjs.reset().plugins(samjsMongo)
-    fs.unlinkAsync testConfigFile
-    .catch -> return true
-    .finally ->
-      done()
-
-  describe "mongo", ->
+  describe "files", ->
+    before reset
+    after shutdown
     it "should be accessible", ->
-      should.exist samjs.mongo
-    it "should have default option mongoURI", ->
+      samjs.plugins(samjsFiles)
+      should.exist samjs.files
+    it "should startup", (done) ->
       samjs.options({config:testConfigFile})
-      samjs.options["mongoURI"].should.equal "mongoURI"
-    it "should have default config mongoURI", ->
-      samjs.configs()
-      should.exist samjs.configs["mongoURI"]
-    it "should take model plugins", ->
-      samjs.mongo.plugins testPlugin: ->
-        @someProp = true
-        return @
-      samjs.models(testModel)
-      samjs.models.test.someProp.should.be.true
-    it "should configure", (done) ->
-      samjs.startup().io.listen(port)
+      .configs()
+      .models(testModel,testModel4)
+      .startup().io.listen(port)
       client = samjsClient({
         url: url
         ioOpts:
           reconnection: false
           autoConnect: false
         })()
-      client.install.onceInConfigMode
-      .return client.install.set "mongoURI", mongodb
-      .then -> done()
+      samjs.state.onceStarted.then -> done()
       .catch done
-    it "should be configured", (done) ->
-      samjs.state.ifConfigured()
-      .then -> done()
-      .catch done
-    it "should be installed", (done) ->
-      samjs.state.ifInstalled()
+    describe "model", ->
+      model = null
+      it "should exist", ->
+        model = samjs.models[testModel.name]
+        should.exist model
+      it "should be able to _set and _get", (done) ->
+        model._set "{test:test}"
+        .then (file) ->
+          stats = fs.statSync file.fullpath
+          stats.isFile().should.be.true
+          model._get()
+        .then (result) ->
+          result.should.equal "{test:test}"
+          done()
+        .catch done
+      it "should be able to hook up", (done) ->
+        finished = ->
+          remover()
+          done()
+        remover = model.addHook "after_Set", (file) ->
+          file.path.should.equal testConfigFile
+
+          finished()
+          return file
+        model._set "{test:test}"
+        .catch done
+      describe "client", ->
+        clientTest = null
+        it "should plugin", ->
+          client.plugins(samjsFilesClient)
+          should.exist client.Files
+        it "should set", (done) ->
+          clientTest = new client.Files("test")
+          clientTest.set "{test2:test}"
+          .then -> done()
+          .catch done
+        it "should get", (done) ->
+          clientTest.get()
+          .then (response) ->
+            response.should.equal "{test2:test}"
+            done()
+          .catch done
+    describe "model with multiple files", ->
+      model4 = null
+      it "should exist", ->
+        model4 = samjs.models[testModel4.name]
+        should.exist model4
+      it "should be able to _set and _get", (done) ->
+        model4._set testConfigFile+"2","{test:test}"
+        .then (file) ->
+          stats = fs.statSync file.fullpath
+          stats.isFile().should.be.true
+          model4._get(testConfigFile+"2")
+        .then (result) ->
+          result.should.equal "{test:test}"
+          done()
+        .catch done
+      describe "client", ->
+        clientTest = null
+        it "should plugin", ->
+          client.plugins(samjsFilesClient)
+          should.exist client.Files
+        it "should set", (done) ->
+          clientTest = new client.Files("testMultipleFiles")
+          clientTest.set path:testConfigFile+"2",data:"{test2:test}"
+          .then -> done()
+          .catch done
+        it "should get", (done) ->
+          clientTest.get(testConfigFile+"2")
+          .then (response) ->
+            response.should.equal "{test2:test}"
+            done()
+          .catch done
+  describe "files+auth", ->
+    before reset
+    after shutdown
+    it "should be accessible", ->
+      samjs.plugins(samjsAuth,samjsFiles)
+      should.exist samjs.files
+      should.exist samjs.auth
+    it "should install", (done) ->
+      samjs.options({config:testConfigFile})
+      .configs()
+      .models(testModel,testModel2,testModel3)
+      .startup().io.listen(port)
+      client = samjsClient({
+        url: url
+        ioOpts:
+          reconnection: false
+          autoConnect: false
+        })()
+      client.plugins(samjsAuthClient,samjsFilesClient)
+      client.auth.createRoot name:"root",pwd:"rootroot"
       .then -> done()
       .catch done
     it "should startup", (done) ->
-      samjs.started.then -> done()
-      .catch (e) -> console.log e
+      samjs.state.onceStarted.then -> done()
+      .catch done
     describe "client", ->
-      it "should plugin", ->
-        client.plugins(samjsMongoClient)
-        should.exist client.Mongo
-      it "should insert data", (done) ->
-        clientTest = new client.Mongo("test")
-        clientTest.insert testProp:"test",testProp2: false
-        .then (response) ->
-          should.exist response._id
+      clientTest = null
+      clientTest2 = null
+      clientTest3 = null
+      it "should be unaccessible", (done) ->
+        clientTest = new client.Files("test")
+        clientTest2 = new client.Files("test2")
+        clientTest3 = new client.Files("test3")
+        samjs.Promise.any [clientTest.get(),clientTest2.get(),clientTest3.get(),clientTest.set("something"),clientTest2.set("something"),clientTest3.set("something")]
+        .catch (result) ->
+          result.should.be.an.instanceOf Error
+          done()
+      it "should auth", (done) ->
+        client.auth.login {name:"root",pwd:"rootroot"}
+        .then (result) ->
+          result.name.should.equal "root"
           done()
         .catch done
-      it "should count data", (done) ->
-        clientTest.count()
-        .then (response) ->
-          response.should.equal 1
+      it "should be still unable to access test", (done) ->
+        samjs.Promise.any [clientTest.get(),clientTest.set("something")]
+        .catch (result) ->
+          result.should.be.an.instanceOf Error
+          done()
+      it "should be able to set and get test2 and test3", (done) ->
+        samjs.Promise.all [clientTest2.set("something2"),clientTest3.set("something3")]
+        .then ->
+          samjs.Promise.all [clientTest2.get(),clientTest3.get()]
+        .then (result) ->
+          result[0].should.equal "something2"
+          result[1].should.equal "something3"
           done()
         .catch done
-      it "should find data", (done) ->
-        clientTest.find find: {testProp:"test"}, fields: "testProp2"
-        .then (response) ->
-          response.length.should.be.above(0)
-          for entry in response
-            should.not.exist entry.testProp
-            entry.testProp2.should.be.false
-            should.exist entry._id
-          done()
-        .catch done
-      it "should update data", (done) ->
-        clientTest.update cond: {testProp:"test"}, doc: {testProp2:true}
-        .then (response) ->
-          should.exist response[0]._id
-          clientTest.find find: {testProp:"test"}
-        .then (response) ->
-          response[0].testProp2.should.be.true
-          done()
-        .catch done
-      it "should remove data", (done) ->
-        clientTest.remove {testProp:"test"}
-        .then (response) ->
-          response.length.should.be.above(0)
-          done()
-        .catch done
-  after (done) ->
-    if samjs.shutdown?
-      samjs.shutdown().then -> done()
-    else
-      done()

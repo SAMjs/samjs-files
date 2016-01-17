@@ -20,7 +20,9 @@
     "mocha": "^2.3.4",
     "samjs": "*",
     "samjs-client": "*",
-    "samjs-files-client": "*"
+    "samjs-files-client": "*",
+    "samjs-auth": "*",
+    "samjs-auth-client": "*"
   },
   "keywords": [],
   "readmeFilename": "README.md",
