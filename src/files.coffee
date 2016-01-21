@@ -160,7 +160,7 @@ module.exports = (samjs) ->
             .then (obj) ->
               socket.broadcast.emit("updated", obj.path)
               return success: true, content: undefined
-            .catch (err) -> success: false, content: undefined
+            .catch (err) -> success: false, content: err.message
             .then (response) -> socket.emit "set." + request.token, response
       model.startup = ->
         debug "model "+@name+" - loaded"
