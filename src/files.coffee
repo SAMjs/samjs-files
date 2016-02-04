@@ -49,12 +49,17 @@ module.exports = (samjs) ->
             throw new Error "files model.#{model.name} #{temp} is not a file"
           else if type == "folder" and not stats.isDirectory()
             throw new Error "files model.#{model.name} #{temp} is not a folder"
+      resolvePath = (relativePath) ->
+        if model.options.cwd?
+          return path.resolve model.options.cwd, relativePath
+        else
+          return path.resolve relativePath
       isFile = (fullpath) -> check("file", fullpath)
       isFolder = (fullpath) -> check("folder", fullpath)
       createFile = (file) ->
         if samjs.util.isString(file)
           file = {path: file}
-        file.fullpath ?= path.resolve file.path
+        file.fullpath ?= resolvePath file.path
         if model.cache
           file.dirty = true
         model._files[file.path] = file
@@ -66,10 +71,10 @@ module.exports = (samjs) ->
         for entry in model.folders
           if samjs.util.isObject entry
             throw new Error "a folder object needs a path in model: #{model.name}" unless entry.path?
-            entry.fullpath = path.resolve entry.path
+            entry.fullpath = resolvePath entry.path
             model._folders[entry.path] = entry
           else if samjs.util.isString entry
-            model._folders[entry] = {fullpath:path.resolve entry, path: entry}
+            model._folders[entry] = {fullpath:resolvePath entry, path: entry}
           else
             throw new Error "somethings wrong with folders in model: #{model.name}"
           isFolder model._folders[entry].fullpath
@@ -85,7 +90,7 @@ module.exports = (samjs) ->
         file = model._files[filepath]
         unless file?
           return null unless model._folders?
-          fullpath = path.resolve filepath
+          fullpath = resolvePath filepath
           for entry,folderobj of model._folders
             if fullpath.indexOf folderobj.fullpath > -1
               file = samjs.helper.clone folderobj # inherit permissions
@@ -160,7 +165,7 @@ module.exports = (samjs) ->
             .then (obj) ->
               socket.broadcast.emit("updated", obj.path)
               return success: true, content: undefined
-            .catch (err) -> success: false, content: err.message
+            .catch (err) -> success: false, content: undefined
             .then (response) -> socket.emit "set." + request.token, response
       model.startup = ->
         debug "model "+@name+" - loaded"

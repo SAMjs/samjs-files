@@ -7,6 +7,7 @@ samjsFilesClient = require "samjs-files-client"
 samjsAuth = require "samjs-auth"
 samjsAuthClient = require "samjs-auth-client"
 fs = samjs.Promise.promisifyAll(require("fs"))
+path = require "path"
 port = 3060
 url = "http://localhost:"+port+"/"
 testConfigFile = "test/testConfig.json"
@@ -32,6 +33,11 @@ testModel4 =
   name: "testMultipleFiles"
   db: "files"
   files: [testConfigFile,testConfigFile+"2"]
+testModel5 =
+  name: "testCWD"
+  db: "files"
+  options: cwd: "test"
+  files: "testConfig.json4"
 unlink = (file) ->
   fs.unlinkAsync file
   .catch -> return true
@@ -42,7 +48,7 @@ reset = (done) ->
     done()
 shutdown = (done) ->
 
-  promises = [unlink(testConfigFile),unlink(testConfigFile+"2"),unlink(testConfigFile+"3")]
+  promises = [unlink(testConfigFile),unlink(testConfigFile+"2"),unlink(testConfigFile+"3"),unlink(testConfigFile+"4")]
   promises.push samjs.shutdown() if samjs.shutdown?
   samjs.Promise.all promises
   .then -> done()
@@ -59,7 +65,7 @@ describe "samjs", ->
     it "should startup", (done) ->
       samjs.options({config:testConfigFile})
       .configs()
-      .models(testModel,testModel4)
+      .models(testModel,testModel4,testModel5)
       .startup().io.listen(port)
       client = samjsClient({
         url: url
@@ -142,6 +148,21 @@ describe "samjs", ->
             response.should.equal "{test2:test}"
             done()
           .catch done
+    describe "model with cwd", ->
+      model5 = null
+      it "should exist", ->
+        model5 = samjs.models[testModel5.name]
+        should.exist model5
+      it "should be able to _set and _get", (done) ->
+        model5._set "{test:test}"
+        .then (file) ->
+          stats = fs.statSync path.resolve(testConfigFile+"4")
+          stats.isFile().should.be.true
+          model5._get()
+        .then (result) ->
+          result.should.equal "{test:test}"
+          done()
+        .catch done
   describe "files+auth", ->
     before reset
     after shutdown
