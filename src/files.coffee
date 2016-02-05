@@ -50,8 +50,8 @@ module.exports = (samjs) ->
           else if type == "folder" and not stats.isDirectory()
             throw new Error "files model.#{model.name} #{temp} is not a folder"
       resolvePath = (relativePath) ->
-        if model.options.cwd?
-          return path.resolve model.options.cwd, relativePath
+        if model.cwd?
+          return path.resolve model.cwd, relativePath
         else
           return path.resolve relativePath
       isFile = (fullpath) -> check("file", fullpath)
