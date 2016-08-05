@@ -14,18 +14,21 @@
   "dependencies": {},
   "devDependencies": {
     "atom-ui-reporter": "0.0.1",
-    "chai": "^3.4.1",
+    "chai": "^3.5.0",
     "coffee-script": "^1.10.0",
-    "mocha": "^2.3.4",
-    "samjs": "*",
-    "samjs-client": "*",
-    "samjs-files-client": "*",
-    "samjs-auth": "*",
-    "samjs-auth-client": "*"
+    "mocha": "^2.5.3",
+    "rimraf": "^2.5.4",
+    "samjs": "^0.2.0",
+    "samjs-client": "^0.2.0",
+    "samjs-files-client": "^0.2.0"
   },
   "keywords": [],
   "readmeFilename": "README.md",
   "scripts": {
-    "patch": "npm version patch;npm publish;git push;git push --tags"
+    "build": "rimraf lib/ && coffee --no-header --compile --output lib/ src/*.coffee",
+    "test": "mocha",
+    "preversion": "npm test",
+    "version": "npm run build && git add .",
+    "postversion": "git push && git push --tags && npm publish"
   }
 }

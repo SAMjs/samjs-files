@@ -4,40 +4,54 @@ samjs = require "samjs"
 samjsClient = require "samjs-client"
 samjsFiles = require "../src/main"
 samjsFilesClient = require "samjs-files-client"
-samjsAuth = require "samjs-auth"
-samjsAuthClient = require "samjs-auth-client"
 fs = samjs.Promise.promisifyAll(require("fs"))
 path = require "path"
 port = 3060
 url = "http://localhost:"+port+"/"
 testConfigFile = "test/testConfig.json"
 
-testModel =
-  name: "test"
+Models = [{
+  name: "testFile"
   db: "files"
   files: testConfigFile
-testModel2 =
-  name: "test2"
-  db: "files"
-  files: testConfigFile+"2"
-  write: "root"
-  read: "root"
-testModel3 =
-  name: "test3"
+  write: true
+  read: true
+  },{
+  name: "testFileObj"
   db: "files"
   files:
-    path: testConfigFile+"3"
-    write: "root"
-    read: "root"
-testModel4 =
-  name: "testMultipleFiles"
+    path: testConfigFile
+    write: true
+    read: true
+  },{
+  name: "testFileMultiple"
   db: "files"
   files: [testConfigFile,testConfigFile+"2"]
-testModel5 =
+  write: true
+  read: true
+  },{
+  name: "testFileMultipleObj"
+  db: "files"
+  files: [{
+    path:testConfigFile
+    write: true
+    read: true
+    },testConfigFile+"3"
+  ]
+  },{
   name: "testCWD"
   db: "files"
   options: cwd: "test"
-  files: "testConfig.json4"
+  files: testConfigFile
+  write: true
+  read: true
+  },{
+  name: "testFolder"
+  db: "files"
+  folders: "test"
+  write: true
+  read: true
+}]
 unlink = (file) ->
   fs.unlinkAsync file
   .catch -> return true
@@ -47,8 +61,7 @@ reset = (done) ->
   .finally ->
     done()
 shutdown = (done) ->
-
-  promises = [unlink(testConfigFile),unlink(testConfigFile+"2"),unlink(testConfigFile+"3"),unlink(testConfigFile+"4")]
+  promises = [unlink(testConfigFile),unlink(testConfigFile+"2"),unlink(testConfigFile+"3")]
   promises.push samjs.shutdown() if samjs.shutdown?
   samjs.Promise.all promises
   .then -> done()
@@ -56,6 +69,7 @@ shutdown = (done) ->
 describe "samjs", ->
   client = null
   clientTest = null
+  model = null
   describe "files", ->
     before reset
     after shutdown
@@ -65,7 +79,7 @@ describe "samjs", ->
     it "should startup", (done) ->
       samjs.options({config:testConfigFile})
       .configs()
-      .models(testModel,testModel4,testModel5)
+      .models(Models)
       .startup().io.listen(port)
       client = samjsClient({
         url: url
@@ -73,12 +87,12 @@ describe "samjs", ->
           reconnection: false
           autoConnect: false
         })()
+      client.plugins(samjsFilesClient)
       samjs.state.onceStarted.then -> done()
       .catch done
     describe "model", ->
-      model = null
       it "should exist", ->
-        model = samjs.models[testModel.name]
+        model = samjs.models["testFile"]
         should.exist model
       it "should be able to _set and _get", (done) ->
         model._set "{test:test}"
@@ -96,18 +110,14 @@ describe "samjs", ->
           done()
         remover = model.addHook "after_Set", (file) ->
           file.path.should.equal testConfigFile
-
           finished()
           return file
         model._set "{test:test}"
         .catch done
       describe "client", ->
         clientTest = null
-        it "should plugin", ->
-          client.plugins(samjsFilesClient)
-          should.exist client.Files
         it "should set", (done) ->
-          clientTest = new client.Files("test")
+          clientTest = new client.Files("testFile")
           clientTest.set "{test2:test}"
           .then -> done()
           .catch done
@@ -117,28 +127,52 @@ describe "samjs", ->
             response.should.equal "{test2:test}"
             done()
           .catch done
-    describe "model with multiple files", ->
-      model4 = null
+
+    describe "model with file object", ->
       it "should exist", ->
-        model4 = samjs.models[testModel4.name]
-        should.exist model4
+        model = samjs.models["testFileObj"]
+        should.exist model
       it "should be able to _set and _get", (done) ->
-        model4._set testConfigFile+"2","{test:test}"
+        model._set testConfigFile,"{test:test2}"
         .then (file) ->
           stats = fs.statSync file.fullpath
           stats.isFile().should.be.true
-          model4._get(testConfigFile+"2")
+          model._get(testConfigFile)
+        .then (result) ->
+          result.should.equal "{test:test2}"
+          done()
+        .catch done
+      describe "client", ->
+        clientTest = null
+        it "should set", (done) ->
+          clientTest = new client.Files("testFileObj")
+          clientTest.set path:testConfigFile,data:"{test2:test}"
+          .then -> done()
+          .catch done
+        it "should get", (done) ->
+          clientTest.get(testConfigFile)
+          .then (response) ->
+            response.should.equal "{test2:test}"
+            done()
+          .catch done
+    describe "model with multiple files", ->
+      it "should exist", ->
+        model = samjs.models["testFileMultiple"]
+        should.exist model
+      it "should be able to _set and _get", (done) ->
+        model._set testConfigFile+"2","{test:test}"
+        .then (file) ->
+          stats = fs.statSync file.fullpath
+          stats.isFile().should.be.true
+          model._get(testConfigFile+"2")
         .then (result) ->
           result.should.equal "{test:test}"
           done()
         .catch done
       describe "client", ->
         clientTest = null
-        it "should plugin", ->
-          client.plugins(samjsFilesClient)
-          should.exist client.Files
         it "should set", (done) ->
-          clientTest = new client.Files("testMultipleFiles")
+          clientTest = new client.Files("testFileMultiple")
           clientTest.set path:testConfigFile+"2",data:"{test2:test}"
           .then -> done()
           .catch done
@@ -148,75 +182,76 @@ describe "samjs", ->
             response.should.equal "{test2:test}"
             done()
           .catch done
-    describe "model with cwd", ->
-      model5 = null
+    describe "model with multiple file objects", ->
       it "should exist", ->
-        model5 = samjs.models[testModel5.name]
-        should.exist model5
+        model = samjs.models["testFileMultipleObj"]
+        should.exist model
       it "should be able to _set and _get", (done) ->
-        model5._set "{test:test}"
+        model._set testConfigFile,"{test:test4864}"
         .then (file) ->
-          stats = fs.statSync path.resolve(testConfigFile+"4")
+          stats = fs.statSync file.fullpath
           stats.isFile().should.be.true
-          model5._get()
+          model._get(testConfigFile)
         .then (result) ->
-          result.should.equal "{test:test}"
+          result.should.equal "{test:test4864}"
+          model._set(testConfigFile+"3","{test:test4864}")
+        .then (file) ->
+          stats = fs.statSync file.fullpath
+          stats.isFile().should.be.true
+          model._get(testConfigFile+"3")
+        .then (result) ->
+          result.should.equal "{test:test4864}"
           done()
         .catch done
-  describe "files+auth", ->
-    before reset
-    after shutdown
-    it "should be accessible", ->
-      samjs.plugins(samjsAuth,samjsFiles)
-      should.exist samjs.files
-      should.exist samjs.auth
-    it "should install", (done) ->
-      samjs.options({config:testConfigFile})
-      .configs()
-      .models(testModel,testModel2,testModel3)
-      .startup().io.listen(port)
-      client = samjsClient({
-        url: url
-        ioOpts:
-          reconnection: false
-          autoConnect: false
-        })()
-      client.plugins(samjsAuthClient,samjsFilesClient)
-      client.auth.createRoot name:"root",pwd:"rootroot"
-      .then -> done()
-      .catch done
-    it "should startup", (done) ->
-      samjs.state.onceStarted.then -> done()
-      .catch done
-    describe "client", ->
-      clientTest = null
-      clientTest2 = null
-      clientTest3 = null
-      it "should be unaccessible", (done) ->
-        clientTest = new client.Files("test")
-        clientTest2 = new client.Files("test2")
-        clientTest3 = new client.Files("test3")
-        samjs.Promise.any [clientTest.get(),clientTest2.get(),clientTest3.get(),clientTest.set("something"),clientTest2.set("something"),clientTest3.set("something")]
-        .catch (result) ->
-          result.should.be.an.instanceOf Error
-          done()
-      it "should auth", (done) ->
-        client.auth.login {name:"root",pwd:"rootroot"}
+      describe "client", ->
+        clientTest = null
+        it "should set", (done) ->
+          clientTest = new client.Files("testFileMultiple")
+          clientTest.set path:testConfigFile,data:"{test4864:test}"
+          .then -> done()
+          .catch done
+        it "should get", (done) ->
+          clientTest.get(testConfigFile)
+          .then (response) ->
+            response.should.equal "{test4864:test}"
+            done()
+          .catch done
+        it "should refuse to set when not permitted", (done) ->
+          clientTest.set path:testConfigFile+"3",data:"{test4864:test}"
+          .catch (e) ->
+            done()
+        it "should refuse to get when not permitted", (done) ->
+          clientTest.get path:testConfigFile+"3"
+          .catch (e) ->
+            done()
+
+    describe "model with cwd", ->
+      model = null
+      it "should exist", ->
+        model = samjs.models["testCWD"]
+        should.exist model
+      it "should be able to _set and _get", (done) ->
+        model._set "{test4:test}"
+        .then (file) ->
+          stats = fs.statSync path.resolve(testConfigFile)
+          stats.isFile().should.be.true
+          model._get()
         .then (result) ->
-          result.name.should.equal "root"
+          result.should.equal "{test4:test}"
           done()
         .catch done
-      it "should be still unable to access test", (done) ->
-        samjs.Promise.any [clientTest.get(),clientTest.set("something")]
-        .catch (result) ->
-          result.should.be.an.instanceOf Error
-          done()
-      it "should be able to set and get test2 and test3", (done) ->
-        samjs.Promise.all [clientTest2.set("something2"),clientTest3.set("something3")]
-        .then ->
-          samjs.Promise.all [clientTest2.get(),clientTest3.get()]
+    describe "model with folder", ->
+      model = null
+      it "should exist", ->
+        model = samjs.models["testFolder"]
+        should.exist model
+      it "should be able to _set and _get", (done) ->
+        model._set testConfigFile,"{test45:test}"
+        .then (file) ->
+          stats = fs.statSync path.resolve(testConfigFile)
+          stats.isFile().should.be.true
+          model._get(testConfigFile)
         .then (result) ->
-          result[0].should.equal "something2"
-          result[1].should.equal "something3"
+          result.should.equal "{test45:test}"
           done()
         .catch done
