@@ -65,8 +65,8 @@ model2.get("someFileInAssetsFolder").then(function(){
 
 name | type | default | description
 ---: | --- | --- | ---
-cache | boolean | `true` | set `false` when files are large, many or seldom used. Will load the files in memory and activate a `fs.watch`
-options | object |` {encoding: 'utf8'}` | will be passed to `fs.readFile`
+cache | boolean | `false` | set `false` when files are large, many or seldom used. Will load the files in memory and activate a `fs.watch`
+options | object |`{encoding: null}` | will be passed to `fs.readFile`
 
 ### model hooks
 

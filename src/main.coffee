@@ -39,10 +39,8 @@ module.exports = (samjs) ->
           model[hookName] = [model[hookName]] unless samjs.util.isArray(model[hookName])
           model.addHook hookName, hook for hook in model[hookName]
       model = model._hooks.beforeCreate model
-      model.cache ?= true
-      model.options.encoding ?= "utf8"
       model.interfaces = []
-      model._files = {} if model.cache
+      model._files = {}
       # check for file/folder existance and type
       check = (type, fullpath) ->
         try
@@ -51,9 +49,9 @@ module.exports = (samjs) ->
           debug "#{model.name} WARNING: #{fullpath} doesn't exist"
         if stats?
           if type == "file" and not stats.isFile()
-            throw new Error "files model.#{model.name} #{temp} is not a file"
+            throw new Error "files model.#{model.name} #{fullpath} is not a file"
           else if type == "folder" and not stats.isDirectory()
-            throw new Error "files model.#{model.name} #{temp} is not a folder"
+            throw new Error "files model.#{model.name} #{fullpath} is not a folder"
       # resolve path relative to a given cwd
       resolvePath = (relativePath) ->
         if model.cwd?
@@ -138,7 +136,7 @@ module.exports = (samjs) ->
 
       model.get = (filepath, client) ->
         file = getFile filepath
-        return samjs.Promise.reject("file not in model") unless file?
+        return samjs.Promise.reject(new Error("file not in model")) unless file?
         read = file.read
         read ?= model.read
         return samjs.Promise.reject(new Error("no permission")) unless read
@@ -154,6 +152,48 @@ module.exports = (samjs) ->
             .then (fileContent) -> success: true, content: fileContent
             .catch (err) -> success: false, content: undefined
             .then (response) -> socket.emit "get." + request.token, response
+
+      model.tokens = {}
+
+      model.getToken = (filepath, client) ->
+        file = getFile filepath
+        return samjs.Promise.reject("file not in model") unless file?
+        read = file.read
+        read ?= model.read
+        return samjs.Promise.reject(new Error("no permission")) unless read
+        return model._hooks.beforeGet(client: client, file:file)
+        .then ({file}) ->
+          return samjs.helper.generateToken 24
+          .then (token) ->
+            model.tokens[token] = file
+            setTimeout (() -> delete model.tokens[token]),5000
+            return token
+
+      model.getByToken = (filepath, token) ->
+        file = getFile filepath
+        return new samjs.Promise (resolve, reject) ->
+          if model.tokens[token]? and model.tokens[token] == file
+            return resolve(file)
+          else
+            return reject(new Error("wrong token"))
+
+      model.interfaces.push (socket) ->
+        socket.on "getToken", (request) ->
+          if request?.token?
+            model.getToken request.content, socket.client
+            .then (token) -> success: true, content: token
+            .catch (err) -> success: false, content: err
+            .then (response) -> socket.emit "getToken." + request.token, response
+
+      model.interfaces.push (socket) ->
+        socket.on "deleteToken", (request) ->
+          if request?.token?
+            if model.tokens[request.content]?
+              delete model.tokens[request.content]
+              response = success: true
+            else
+              response = success: false
+            socket.emit "deleteToken." + request.token, response
 
       model._set = (file, data) ->
         unless data?
@@ -190,7 +230,7 @@ module.exports = (samjs) ->
             .then (obj) ->
               socket.broadcast.emit("updated", obj.path)
               return success: true, content: undefined
-            .catch (err) -> success: false, content: undefined
+            .catch (err) -> success: false, content: err
             .then (response) -> socket.emit "set." + request.token, response
 
       model.startup = ->

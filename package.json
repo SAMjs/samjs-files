@@ -11,23 +11,31 @@
   "engines": {
     "node": "*"
   },
-  "dependencies": {},
+  "dependencies": {
+    "etag": "^1.7.0"
+  },
   "devDependencies": {
     "atom-ui-reporter": "0.0.1",
     "chai": "^3.5.0",
     "chai-as-promised": "^6.0.0",
+    "coffee-loader": "^0.7.2",
     "coffee-script": "^1.11.1",
+    "css-loader": "^0.25.0",
     "mocha": "^3.1.2",
+    "pug": "^2.0.0-beta6",
     "rimraf": "^2.5.4",
     "samjs": "^0.2.3",
     "samjs-client": "^0.2.2",
-    "samjs-files-client": "^0.2.2"
+    "samjs-files-client": "^0.2.2",
+    "vue": "^2.0.3",
+    "vue-loader": "^9.7.0"
   },
   "keywords": [],
   "readmeFilename": "README.md",
   "scripts": {
     "build": "rimraf lib/ && coffee --no-header --compile --output lib/ src/*.coffee",
     "test": "mocha",
+    "dev": "nodemon --watch src/ --watch dev/server.coffee dev/server.coffee",
     "preversion": "npm test",
     "version": "npm run build && git add .",
     "postversion": "git push && git push --tags && npm publish"

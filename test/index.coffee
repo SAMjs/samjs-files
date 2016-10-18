@@ -16,11 +16,13 @@ Models = [{
   name: "testFile"
   db: "files"
   files: testConfigFile
+  options: 'utf8'
   write: true
   read: true
   },{
   name: "testFileObj"
   db: "files"
+  options: 'utf8'
   files:
     path: testConfigFile
     write: true
@@ -28,11 +30,13 @@ Models = [{
   },{
   name: "testFileMultiple"
   db: "files"
+  options: 'utf8'
   files: [testConfigFile,testConfigFile+"2"]
   write: true
   read: true
   },{
   name: "testFileMultipleObj"
+  options: 'utf8'
   db: "files"
   files: [{
     path:testConfigFile
@@ -42,13 +46,15 @@ Models = [{
   ]
   },{
   name: "testCWD"
+  options: 'utf8'
   db: "files"
-  options: cwd: "test"
+  cwd: "./"
   files: testConfigFile
   write: true
   read: true
   },{
   name: "testFolder"
+  options: 'utf8'
   db: "files"
   folders: "test"
   write: true
