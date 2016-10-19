@@ -5,8 +5,20 @@ path = require "path"
 
 module.exports = (samjs) ->
   debug = samjs.debug("files")
-  asyncHooks = ["afterGet","afterSet","after_Set"
-    "beforeGet","beforeSet","before_Set"]
+  asyncHooks = [
+    "afterGet"
+    "after_Get"
+    "afterSet"
+    "after_Set"
+    "afterDelete"
+    "after_Delete"
+    "beforeGet"
+    "before_Get"
+    "beforeSet"
+    "before_Set"
+    "beforeDelete"
+    "before_Delete"
+  ]
   syncHooks = ["afterCreate","beforeCreate"]
   return new class Files
     constructor: ->
@@ -24,16 +36,17 @@ module.exports = (samjs) ->
       hasAuth = false
       for name, options of model.plugins
         throw new Error "#{name} files plugin not found" unless @_plugins[name]?
-        model = @_plugins[name].bind(model)(options)
-        unless samjs.util.isObject model
-          throw new Error "files plugins need to return the model"
+        @_plugins[name].bind(model)(options)
         if name == "noAuth"
           hasNoAuth = true
         if name == "auth"
           hasAuth = true
       # activate auth plugin by default if present
       if @_plugins.auth? and not hasAuth and not hasNoAuth
-        model = @_plugins.auth.bind(model)({})
+        @_plugins.auth.bind(model)({})
+      model.insert ?= model.write
+      model.update ?= model.write
+      model.delete ?= model.write
       for hookName in asyncHooks.concat(syncHooks)
         if model[hookName]?
           model[hookName] = [model[hookName]] unless samjs.util.isArray(model[hookName])
@@ -46,12 +59,13 @@ module.exports = (samjs) ->
         try
           stats = fs.statSync fullpath
         catch
-          debug "#{model.name} WARNING: #{fullpath} doesn't exist"
+          debug "Model: #{model.name} #{fullpath} doesn't exist"
         if stats?
           if type == "file" and not stats.isFile()
             throw new Error "files model.#{model.name} #{fullpath} is not a file"
           else if type == "folder" and not stats.isDirectory()
             throw new Error "files model.#{model.name} #{fullpath} is not a folder"
+
       # resolve path relative to a given cwd
       resolvePath = (relativePath) ->
         if model.cwd?
@@ -68,6 +82,9 @@ module.exports = (samjs) ->
         if model.cache
           file.dirty = true
         model._files[file.path] = file
+        return file
+      createFileAndCheck = (file) ->
+        file = createFile(file)
         isFile file.fullpath
         return file
       # process model folders prop
@@ -89,27 +106,42 @@ module.exports = (samjs) ->
       else # process model files prop
         model.files = [model.files] unless samjs.util.isArray(model.files)
         for file in model.files
-          createFile file # create file objects
+          createFileAndCheck file # create file objects
       # get file object by filepath
-      getFile = (filepath) ->
+      getFile = (filepath) -> new samjs.Promise (resolve, reject) ->
         # get first file object if model only has one
         if not filepath? and model.files? and model.files.length == 1
           filepath = model.files[0]
           filepath = filepath.path if filepath.path?
-        return null unless filepath?
-        file = model._files[filepath]
-        # search filepath in model folders
-        unless file?
-          return null unless model._folders?
-          fullpath = resolvePath filepath
-          for entry,folderobj of model._folders
-            if fullpath.indexOf(folderobj.fullpath) > -1
-              file = samjs.helper.clone folderobj # inherit permissions
-              file.path = filepath
-              file.fullpath = fullpath
-              file = createFile file
-              break
-        return file
+        if filepath?
+          file = model._files[filepath]
+          # search filepath in model folders
+          unless file?
+            if model._folders
+              fullpath = resolvePath filepath
+              for entry,folderobj of model._folders
+                if fullpath.indexOf(folderobj.fullpath) > -1
+                  file = samjs.helper.clone folderobj # inherit permissions
+                  file.path = filepath
+                  file.fullpath = fullpath
+                  file = createFile file
+                  file.isNew = true
+                  break
+          if file?
+            file.write ?= model.write
+            file.delete ?= model.delete
+            file.insert ?= model.insert
+            file.read ?= model.read
+            if file.isNew
+              return fs.stat file.fullpath, (err,stats) ->
+                return resolve(file) if err?
+                if stats.isFile()
+                  file.isNew = false
+                  return resolve(file)
+                return reject(new Error("not a file"))
+            else
+              return resolve(file)
+        return reject(new Error("file not in model"))
       # update cache of file
       updateFile = (file, data) ->
         if model.cache
@@ -120,27 +152,29 @@ module.exports = (samjs) ->
               file.dirty = true
         return
       parseFile = (file) ->
-        return file if samjs.util.isObject(file)
-        return getFile(file)
-
-      model._get = (file) -> new samjs.Promise (resolve, reject) ->
-        file = parseFile file
-        return reject("file not in model") unless file?
-        if model.cache and not file.dirty and file.data?
-          return resolve file.data
+        if samjs.util.isObject(file)
+          samjs.Promise.resolve(file)
         else
-          fs.readFile file.fullpath, model.options, (err, data) ->
-            return resolve(null) if err
-            updateFile(file, data)
-            return resolve(data)
+          getFile(file)
+
+      model._get = (file) ->
+        parseFile file
+        .then model._hooks.before_Get(file)
+        .then (file) -> new samjs.Promise (resolve, reject) ->
+          if model.cache and not file.dirty and file.data?
+            return resolve file.data
+          else
+            fs.readFile file.fullpath, model.options, (err, data) ->
+              return resolve(null) if err
+              updateFile(file, data)
+              return resolve(data)
+        .then model._hooks.after_Get
 
       model.get = (filepath, client) ->
-        file = getFile filepath
-        return samjs.Promise.reject(new Error("file not in model")) unless file?
-        read = file.read
-        read ?= model.read
-        return samjs.Promise.reject(new Error("no permission")) unless read
-        return model._hooks.beforeGet(client: client, file:file)
+        getFile filepath
+        .then (file) ->
+          new Error("no permission") unless file.read
+          model._hooks.beforeGet(client: client, file:file)
         .then ({file}) -> model._get(file)
         .then model._hooks.afterGet
 
@@ -156,12 +190,10 @@ module.exports = (samjs) ->
       model.tokens = {}
 
       model.getToken = (filepath, client) ->
-        file = getFile filepath
-        return samjs.Promise.reject("file not in model") unless file?
-        read = file.read
-        read ?= model.read
-        return samjs.Promise.reject(new Error("no permission")) unless read
-        return model._hooks.beforeGet(client: client, file:file)
+        getFile filepath
+        .then (file) ->
+          new Error("no permission") unless file.read
+          model._hooks.beforeGet(client: client, file:file)
         .then ({file}) ->
           return samjs.helper.generateToken 24
           .then (token) ->
@@ -170,12 +202,11 @@ module.exports = (samjs) ->
             return token
 
       model.getByToken = (filepath, token) ->
-        file = getFile filepath
-        return new samjs.Promise (resolve, reject) ->
+        getFile filepath
+        .then (file) ->
           if model.tokens[token]? and model.tokens[token] == file
-            return resolve(file)
-          else
-            return reject(new Error("wrong token"))
+            return file
+          throw new Error("wrong token")
 
       model.interfaces.push (socket) ->
         socket.on "getToken", (request) ->
@@ -199,9 +230,9 @@ module.exports = (samjs) ->
         unless data?
           data = file
           file = null
-        file = parseFile file
-        return samjs.Promise.reject(new Error "file not in model") unless file?
-        return model._hooks.before_Set(file: file, data: data)
+        parseFile file
+        .then (file) ->
+          model._hooks.before_Set(file: file, data: data)
         .then ({file,data}) -> new samjs.Promise (resolve,reject) ->
           fs.writeFile file.fullpath, data, (err) ->
             if err
@@ -214,12 +245,10 @@ module.exports = (samjs) ->
       model.set = (query, client) ->
         unless query.path?
           query = {path: null, data: query}
-        file = getFile query.path
-        return samjs.Promise.reject("file not in model") unless file?
-        write = file.write
-        write ?= model.write
-        return samjs.Promise.reject(new Error("no permission")) unless write
-        return model._hooks.beforeSet(data: query.data,file:file, client: client)
+        getFile query.path
+        .then (file) ->
+          throw new Error("no permission") unless file.write
+          model._hooks.beforeSet(data: query.data,file:file, client: client)
         .then ({data,file}) -> model._set(file,data)
         .then model._hooks.afterSet
 
@@ -230,8 +259,39 @@ module.exports = (samjs) ->
             .then (obj) ->
               socket.broadcast.emit("updated", obj.path)
               return success: true, content: undefined
-            .catch (err) -> success: false, content: err
+            .catch (err) -> success: false, content: err.message
             .then (response) -> socket.emit "set." + request.token, response
+
+      if model.folders?
+        model._delete = (file) ->
+          parseFile file
+          .then model._hooks.before_Delete
+          .then (file) -> new samjs.Promise (resolve,reject) ->
+            fs.unlink file.fullpath, (err) ->
+              if err
+                reject(err)
+              else
+                updateFile(file, null)
+                resolve(file)
+          .then model._hooks.after_Delete
+
+        model.delete = (query, client) ->
+          getFile filepath
+          .then (file) ->
+            throw new Error("no permission") unless file.delete
+            model._hooks.beforeDelete(client: client, file:file)
+          .then ({file}) -> model._delete(file)
+          .then model._hooks.afterDelete
+
+        model.interfaces.push (socket) ->
+          socket.on "delete", (request) ->
+            if request?.token?
+              model.delete request.content, socket.client
+              .then (obj) ->
+                socket.broadcast.emit("deleted", obj.path)
+                return success: true, content: undefined
+              .catch (err) -> success: false, content: err.message
+              .then (response) -> socket.emit "delete." + request.token, response
 
       model.startup = ->
         debug "model "+@name+" - loaded"
