@@ -21,12 +21,17 @@ samjs
   name:"someFile",
   db:"files",
   files:"package.json",
-  read:true
+  access: {
+    read:true
+  }
+
   },{
   name:"someFolder",
   db:"files",
   folders:"assets/",
-  read:true
+  access: {
+    read:true
+  }
 }
 })
 .startup(server)

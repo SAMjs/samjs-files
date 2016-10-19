@@ -32,6 +32,7 @@ module.exports = (samjs) ->
         throw new Error "files model need files or folders property"
       samjs.helper.initiateHooks model, asyncHooks,syncHooks
       model.options ?= {}
+      model.access ?= {}
       hasNoAuth = false
       hasAuth = false
       for name, options of model.plugins
@@ -44,14 +45,14 @@ module.exports = (samjs) ->
       # activate auth plugin by default if present
       if @_plugins.auth? and not hasAuth and not hasNoAuth
         @_plugins.auth.bind(model)({})
-      model.insert ?= model.write
-      model.update ?= model.write
-      model.delete ?= model.write
+      model.access.insert ?= model.access.write
+      model.access.update ?= model.access.write
+      model.access.delete ?= model.access.write
       for hookName in asyncHooks.concat(syncHooks)
         if model[hookName]?
           model[hookName] = [model[hookName]] unless samjs.util.isArray(model[hookName])
           model.addHook hookName, hook for hook in model[hookName]
-      model = model._hooks.beforeCreate model
+      model._hooks.beforeCreate.bind(model)
       model.interfaces = []
       model._files = {}
       # check for file/folder existance and type
@@ -128,10 +129,10 @@ module.exports = (samjs) ->
                   file.isNew = true
                   break
           if file?
-            file.write ?= model.write
-            file.delete ?= model.delete
-            file.insert ?= model.insert
-            file.read ?= model.read
+            file.write ?= model.access.write
+            file.delete ?= model.access.delete
+            file.insert ?= model.access.insert
+            file.read ?= model.access.read
             if file.isNew
               return fs.stat file.fullpath, (err,stats) ->
                 return resolve(file) if err?
@@ -276,7 +277,7 @@ module.exports = (samjs) ->
           .then model._hooks.after_Delete
 
         model.delete = (query, client) ->
-          getFile filepath
+          getFile query
           .then (file) ->
             throw new Error("no permission") unless file.delete
             model._hooks.beforeDelete(client: client, file:file)
@@ -301,5 +302,5 @@ module.exports = (samjs) ->
         for fileobj of @_files
           fileobj.watcher?.close()
         return true
-      model = model._hooks.afterCreate model
+      model._hooks.afterCreate.bind(model)
       return model

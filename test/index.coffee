@@ -17,8 +17,9 @@ Models = [{
   db: "files"
   files: testConfigFile
   options: 'utf8'
-  write: true
-  read: true
+  access:
+    write: true
+    read: true
   },{
   name: "testFileObj"
   db: "files"
@@ -32,8 +33,9 @@ Models = [{
   db: "files"
   options: 'utf8'
   files: [testConfigFile,testConfigFile+"2"]
-  write: true
-  read: true
+  access:
+    write: true
+    read: true
   },{
   name: "testFileMultipleObj"
   options: 'utf8'
@@ -50,15 +52,17 @@ Models = [{
   db: "files"
   cwd: "./"
   files: testConfigFile
-  write: true
-  read: true
+  access:
+    write: true
+    read: true
   },{
   name: "testFolder"
   options: 'utf8'
   db: "files"
   folders: "test"
-  write: true
-  read: true
+  access:
+    write: true
+    read: true
 }]
 unlink = (file) ->
   fs.unlinkAsync file
