@@ -33,18 +33,15 @@ module.exports = (samjs) ->
       samjs.helper.initiateHooks model, asyncHooks,syncHooks
       model.options ?= {}
       model.access ?= {}
-      hasNoAuth = false
-      hasAuth = false
+      if @_plugins.auth?
+        if model.plugins.noAuth
+          delete model.plugins.noAuth
+        else
+          model.plugins.auth ?= {} # activate auth plugin by default if present
       for name, options of model.plugins
         throw new Error "#{name} files plugin not found" unless @_plugins[name]?
         @_plugins[name].bind(model)(options)
-        if name == "noAuth"
-          hasNoAuth = true
-        if name == "auth"
-          hasAuth = true
-      # activate auth plugin by default if present
-      if @_plugins.auth? and not hasAuth and not hasNoAuth
-        @_plugins.auth.bind(model)({})
+
       model.access.insert ?= model.access.write
       model.access.update ?= model.access.write
       model.access.delete ?= model.access.write

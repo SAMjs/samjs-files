@@ -39,7 +39,7 @@ samjs
 // client-side
 samjs.plugins(require("samjs-files-client"))
 
-model1 = new samjs.Files("someFile")
+model1 = samjs.getFilesModel("someFile")
 model1.get("package.json") // filename can be omitted when model only has one file
 .then(function(response){
   // success
@@ -60,7 +60,7 @@ model1.on("update",function(){
   // file has changed
 })
 
-model2 = new samjs.Files("someFolder")
+model2 = samjs.getFilesModel("someFolder")
 model2.get("someFileInAssetsFolder").then(function(){
   // success
 })
