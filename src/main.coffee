@@ -87,6 +87,8 @@ module.exports = (samjs) ->
         return file
       # process model folders prop
       if model.folders?
+        if model.folders == "/"
+          model.folders = "."
         model.folders = [model.folders] unless samjs.util.isArray(model.folders)
         model._folders = {}
         # parse folders prop into folder objects
@@ -166,33 +168,33 @@ module.exports = (samjs) ->
             fs.readFile file.fullpath, model.options, (err, data) ->
               return resolve(null) if err
               updateFile(file, data)
-              return resolve(data)
+              return resolve(data, file)
         .then model._hooks.after_Get
 
-      model.get = (filepath, client) ->
+      model.get = (filepath, socket) ->
         getFile filepath
         .then (file) ->
           new Error("no permission") unless file.read
-          model._hooks.beforeGet(client: client, file:file)
+          model._hooks.beforeGet(socket: socket, file:file)
         .then ({file}) -> model._get(file)
-        .then model._hooks.afterGet
+        .then (data, file) -> model._hooks.afterGet(socket: socket, file:file, data:data)
 
 
       model.interfaces.push (socket) ->
         socket.on "get", (request) ->
           if request?.token?
-            model.get request.content, socket.client
-            .then (fileContent) -> success: true, content: fileContent
+            model.get request.content, socket
+            .then ({data}) -> success: true, content: data
             .catch (err) -> success: false, content: undefined
             .then (response) -> socket.emit "get." + request.token, response
 
       model.tokens = {}
 
-      model.getToken = (filepath, client) ->
+      model.getToken = (filepath, socket) ->
         getFile filepath
         .then (file) ->
           new Error("no permission") unless file.read
-          model._hooks.beforeGet(client: client, file:file)
+          model._hooks.beforeGet(socket: socket, file:file)
         .then ({file}) ->
           return samjs.helper.generateToken 24
           .then (token) ->
@@ -210,7 +212,7 @@ module.exports = (samjs) ->
       model.interfaces.push (socket) ->
         socket.on "getToken", (request) ->
           if request?.token?
-            model.getToken request.content, socket.client
+            model.getToken request.content, socket
             .then (token) -> success: true, content: token
             .catch (err) -> success: false, content: err
             .then (response) -> socket.emit "getToken." + request.token, response
@@ -241,22 +243,22 @@ module.exports = (samjs) ->
               resolve(file)
         .then model._hooks.after_Set
 
-      model.set = (query, client) ->
+      model.set = (query, socket) ->
         unless query.path?
           query = {path: null, data: query}
         getFile query.path
         .then (file) ->
           throw new Error("no permission") unless file.write
-          model._hooks.beforeSet(data: query.data,file:file, client: client)
+          model._hooks.beforeSet(data: query.data,file:file, socket: socket)
         .then ({data,file}) -> model._set(file,data)
-        .then model._hooks.afterSet
+        .then (file) -> model._hooks.afterSet(file:file, socket: socket)
 
       model.interfaces.push (socket) ->
         socket.on "set", (request) ->
           if request?.token?
-            model.set request.content, socket.client
-            .then (obj) ->
-              socket.broadcast.emit("updated", obj.path)
+            model.set request.content, socket
+            .then ({file}) ->
+              socket.broadcast.emit("updated", file.path)
               return success: true, content: undefined
             .catch (err) -> success: false, content: err.message
             .then (response) -> socket.emit "set." + request.token, response
@@ -274,20 +276,20 @@ module.exports = (samjs) ->
                 resolve(file)
           .then model._hooks.after_Delete
 
-        model.delete = (query, client) ->
+        model.delete = (query, socket) ->
           getFile query
           .then (file) ->
             throw new Error("no permission") unless file.delete
-            model._hooks.beforeDelete(client: client, file:file)
+            model._hooks.beforeDelete(socket: socket, file:file)
           .then ({file}) -> model._delete(file)
-          .then model._hooks.afterDelete
+          .then (file) -> model._hooks.afterDelete(socket:socket, file: file)
 
         model.interfaces.push (socket) ->
           socket.on "delete", (request) ->
             if request?.token?
-              model.delete request.content, socket.client
-              .then (obj) ->
-                socket.broadcast.emit("deleted", obj.path)
+              model.delete request.content, socket
+              .then ({file}) ->
+                socket.broadcast.emit("deleted", file.path)
                 return success: true, content: undefined
               .catch (err) -> success: false, content: err.message
               .then (response) -> socket.emit "delete." + request.token, response
