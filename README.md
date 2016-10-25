@@ -70,8 +70,9 @@ model2.get("someFileInAssetsFolder").then(function(){
 
 name | type | default | description
 ---: | --- | --- | ---
-cache | boolean | `false` | set `false` when files are large, many or seldom used. Will load the files in memory and activate a `fs.watch`
-options | object |`{encoding: null}` | will be passed to `fs.readFile`
+cache | Boolean | `false` | set `false` when files are large, many or seldom used. Will load the files in memory and activate a `fs.watch`
+options | Object |`{encoding: null}` | will be passed to `fs.readFile`
+access | Object | `{}` | use to control access, with, e.g. `samjs-files-auth`
 
 ### model hooks
 
@@ -98,7 +99,9 @@ samjs
   name:"someFile",
   db:"files",
   files:"package.json",
-  read:true,
+  access: {
+    read: true
+  },
   beforeGet: [
     function(obj) {
       if (notPermitted){

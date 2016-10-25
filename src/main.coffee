@@ -127,6 +127,7 @@ module.exports = (samjs) ->
                   break
           if file?
             file.write ?= model.access.write
+            file.update ?= model.access.update
             file.delete ?= model.access.delete
             file.insert ?= model.access.insert
             file.read ?= model.access.read
