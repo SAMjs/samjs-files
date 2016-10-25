@@ -126,7 +126,7 @@ describe "samjs", ->
       describe "client", ->
         clientTest = null
         it "should set",  ->
-          clientTest = new client.Files("testFile")
+          clientTest = client.getFilesModel("testFile")
           clientTest.set "{test2:test}"
 
         it "should get", ->
@@ -150,7 +150,7 @@ describe "samjs", ->
       describe "client", ->
         clientTest = null
         it "should set",  ->
-          clientTest = new client.Files("testFileObj")
+          clientTest = client.getFilesModel("testFileObj")
           clientTest.set path:testConfigFile,data:"{test2:test}"
 
         it "should get",  ->
@@ -174,7 +174,7 @@ describe "samjs", ->
       describe "client", ->
         clientTest = null
         it "should set", ->
-          clientTest = new client.Files("testFileMultiple")
+          clientTest = client.getFilesModel("testFileMultiple")
           clientTest.set path:testConfigFile+"2",data:"{test2:test}"
 
         it "should get", ->
@@ -205,7 +205,7 @@ describe "samjs", ->
       describe "client", ->
         clientTest = null
         it "should set", ->
-          clientTest = new client.Files("testFileMultiple")
+          clientTest = client.getFilesModel("testFileMultiple")
           clientTest.set path:testConfigFile,data:"{test4864:test}"
 
         it "should get",  ->

@@ -13,7 +13,7 @@ samjsFiles = require "samjs-files-client"
 samjs.plugins(samjsFiles)
 module.exports =
   computed:
-    files: -> new samjs.Files("test")
+    files: -> samjs.Files("test")
   data: ->
     status: ""
     filename: "0poctzV.jpg"
