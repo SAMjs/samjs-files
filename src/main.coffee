@@ -3,6 +3,7 @@
 fs = require "fs"
 path = require "path"
 
+
 module.exports = (samjs) ->
   debug = samjs.debug("files")
   asyncHooks = [
@@ -33,6 +34,7 @@ module.exports = (samjs) ->
       samjs.helper.initiateHooks model, asyncHooks,syncHooks
       model.options ?= {}
       model.access ?= {}
+      model.plugins ?= {}
       if @_plugins.auth?
         if model.plugins.noAuth
           delete model.plugins.noAuth
@@ -126,6 +128,7 @@ module.exports = (samjs) ->
                   file.fullpath = fullpath
                   file = createFile file
                   file.isNew = true
+                  model._files[filepath] = file
                   break
           if file?
             file.write ?= model.access.write
@@ -135,7 +138,8 @@ module.exports = (samjs) ->
             file.read ?= model.access.read
             if file.isNew
               return fs.stat file.fullpath, (err,stats) ->
-                return resolve(file) if err?
+                if err?
+                  return resolve(file)
                 if stats.isFile()
                   file.isNew = false
                   return resolve(file)
@@ -151,6 +155,7 @@ module.exports = (samjs) ->
           if not file.watcher?
             file.watcher = fs.watch file.fullpath, (event) ->
               file.dirty = true
+        file.isNew = !data?
         return
       parseFile = (file) ->
         if samjs.util.isObject(file)
@@ -205,7 +210,7 @@ module.exports = (samjs) ->
       model.getByToken = (filepath, token) ->
         getFile filepath
         .then (file) ->
-          if model.tokens[token]? and model.tokens[token] == file
+          if model.tokens[token]? and model.tokens[token].path == file.path
             return file
           throw new Error("wrong token")
 

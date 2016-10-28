@@ -7,7 +7,6 @@ Client: [samjs-files-client](https://github.com/SAMjs/samjs-files-client)
 ## Getting Started
 ```sh
 npm install --save samjs-files
-npm install --save-dev samjs-files-client
 ```
 ## Usage
 
@@ -35,7 +34,8 @@ samjs
 }
 })
 .startup(server)
-
+```
+```js
 // client-side
 samjs.plugins(require("samjs-files-client"))
 
@@ -61,7 +61,10 @@ model1.on("update",function(){
 })
 
 model2 = samjs.getFilesModel("someFolder")
-model2.get("someFileInAssetsFolder").then(function(){
+model2.get("someFileInSomeFolder").then(function(){
+  // success
+})
+model2.get("someFileInSomeFolder").then(function(){
   // success
 })
 ```

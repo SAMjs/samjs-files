@@ -1,5 +1,7 @@
+# out: ../lib/koa-middleware.js
 extname = require('path').extname
 calculate = require('etag')
+querystring = require "querystring"
 
 notfound = {
   ENOENT: true,
@@ -19,7 +21,8 @@ module.exports = (samjs) ->
       splitted = path.split("/")
       model = splitted.shift()
       if samjs.models[model]?
-        yield samjs.models[model].getByToken(splitted.join("/"),token)
+        path = querystring.unescape(splitted.join("/"))
+        yield samjs.models[model].getByToken(path,token)
         .then (file) =>
           path = file.fullpath
           fs.statAsync(path)
