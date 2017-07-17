@@ -1,5 +1,8 @@
 node_modules/
 test/testConfig.json
 config.json
+npm-debug.log
 lib/
-.vscode
+client/
+.vscode/
+shrinkwrap.yaml

@@ -7,37 +7,35 @@
     "name": "Paul Pflugradt",
     "email": "paul.pflugradt@gmail.com"
   },
-  "main": "lib/main.js",
-  "files": [
-    "lib/"
-  ],
+  "main": "lib/index.js",
+  "browser": "client/index.js",
   "engines": {
     "node": "*"
   },
-  "dependencies": {
-    "etag": "^1.8.0"
-  },
+  "files": [
+    "lib/",
+    "client/"
+  ],
   "devDependencies": {
-    "atom-ui-reporter": "0.0.1",
-    "chai": "^3.5.0",
-    "chai-as-promised": "^6.0.0",
-    "coffee-loader": "^0.7.3",
-    "coffee-script": "^1.12.4",
-    "css-loader": "^0.25.0",
-    "mocha": "^3.2.0",
-    "pug": "^2.0.0-beta9",
+    "chai": "^4.1.0",
+    "chai-as-promised": "^7.1.1",
+    "coffee-cli": "^0.2.1",
+    "coffeescript": "^2.0.0-beta3",
+    "mocha": "^3.4.2",
     "rimraf": "^2.6.1",
-    "samjs": "^0.2.3",
-    "samjs-client": "^0.2.2",
-    "samjs-files-client": "^0.2.2",
-    "vue": "^2.0.3",
-    "vue-loader": "^9.7.0"
+    "samjs": "^0.3.2",
+    "script-runner": "^0.1.7",
+    "try-require-multiple": "^0.1.0"
   },
   "keywords": [],
   "readmeFilename": "README.md",
   "scripts": {
-    "build": "rimraf lib/ && coffee --no-header --compile --output lib/ src/*.coffee",
+    "prebuild": "rimraf lib/ client/",
+    "build": "run-npm build:*",
+    "build:server": "coffee-cli --next --bare --no-header --compile --output lib/ src/*.coffee",
+    "build:client": "coffee-cli --no-header --compile --output client/ client-src/*.coffee",
     "test": "mocha",
+    "watch": "mocha --watch",
     "dev": "nodemon --watch src/ --watch dev/server.coffee dev/server.coffee",
     "preversion": "npm test",
     "version": "npm run build && git add .",
